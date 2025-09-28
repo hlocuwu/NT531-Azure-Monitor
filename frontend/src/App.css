@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+html,
+body,
+#root {
+  @apply bg-[#1F1D29] text-white box-border;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar:horizontal {
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-transparent;
+}
+
+.task > ::-webkit-scrollbar-thumb {
+  @apply bg-transparent;
+}
+
