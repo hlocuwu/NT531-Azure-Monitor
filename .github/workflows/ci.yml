@@ -1,0 +1,134 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    branches:
+      - 'main'
+
+env:
+  USERNAME_PAT: hlocuwu
+  REGISTRY: ghcr.io
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Filter changes paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**' 
+
+  setup:
+    needs: changes
+    runs-on: ubuntu-latest
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
+    outputs:
+      sha: ${{ steps.vars.outputs.sha }}
+      repo_name: ${{ steps.convert.outputs.repo }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Convert repo and org to lowercase
+        id: convert
+        run: echo "repo=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Extract SHA
+        id: vars
+        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+  build-backend:
+    needs: [setup, changes]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR 
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.USERNAME_PAT }}
+          password: ${{ secrets.GHCR_PAT }}
+
+      - name: Cache backend layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache-backend
+          key: backend-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            backend-${{ runner.os }}-
+
+      - name: Set IMAGE_BACKEND
+        run: echo "IMAGE_BACKEND=${{ env.REGISTRY }}/${{ needs.setup.outputs.repo_name }}/roadmap-maker-backend" >> $GITHUB_ENV
+
+      - name: Build backend Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ env.IMAGE_BACKEND }}:latest
+            ${{ env.IMAGE_BACKEND }}:${{ needs.setup.outputs.sha }}
+          cache-from: type=local,src=/tmp/.buildx-cache-backend
+          cache-to: type=local,dest=/tmp/.buildx-cache-backend
+
+  build-frontend:
+    needs: [setup, changes]
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR 
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.USERNAME_PAT }}
+          password: ${{ secrets.GHCR_PAT }}
+
+      - name: Cache frontend layers
+        uses: actions/cache@v4
+        with: 
+          path: /tmp/.buildx-cache-frontend
+          key: frontend-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            frontend-${{ runner.os }}-
+
+      - name: Set IMAGE_FRONTEND
+        run: echo "IMAGE_FRONTEND=${{ env.REGISTRY }}/${{ needs.setup.outputs.repo_name }}/roadmap-maker-frontend" >> $GITHUB_ENV
+
+      - name: Build frontend Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ env.IMAGE_FRONTEND }}:latest
+            ${{ env.IMAGE_FRONTEND }}:${{ needs.setup.outputs.sha }}
+          cache-from: type=local,src=/tmp/.buildx-cache-frontend
+          cache-to: type=local,dest=/tmp/.buildx-cache-frontend
