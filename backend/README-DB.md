@@ -40,3 +40,5 @@ docker exec backend-postgres pg_dump -U postgres cloudops_db > backup.sql
 docker run --rm -v backend_postgres_data:/data -v $(pwd):/backup alpine tar czf /backup/postgres_backup.tar.gz -C /data .
 ```
 
+
+
