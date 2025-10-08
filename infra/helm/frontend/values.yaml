@@ -58,7 +58,7 @@ service:
   # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
   port: 80
   targetPort: 5173
-  loadBalancerIP: 
+  loadBalancerIP: "52.163.119.181" 
 
 # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:
@@ -163,3 +163,6 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+config:
+  apiUrl: "http://4.193.203.12"
