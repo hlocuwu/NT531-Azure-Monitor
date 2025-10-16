@@ -57,8 +57,7 @@ service:
   type: LoadBalancer
   # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
   port: 80
-  targetPort: 5173
-  loadBalancerIP: "52.163.119.181" 
+  targetPort: 5173 
 
 # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:
@@ -131,11 +130,11 @@ resources: {}
 livenessProbe:
   httpGet:
     path: /
-    port: http
+    port: 5173
 readinessProbe:
   httpGet:
     path: /
-    port: http
+    port: 5173
 
 # This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
 autoscaling:
@@ -165,4 +164,4 @@ tolerations: []
 affinity: {}
 
 config:
-  apiUrl: "http://4.193.203.12"
+  apiUrl: "http://135.171.146.68/"

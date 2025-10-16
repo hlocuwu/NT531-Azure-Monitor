@@ -6,7 +6,6 @@ metadata:
     {{- include "backend.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
-  loadBalancerIP: {{ .Values.service.loadBalancerIP }}
   ports:
     - port: {{ .Values.service.port }}
       targetPort: {{ .Values.service.targetPort }}
