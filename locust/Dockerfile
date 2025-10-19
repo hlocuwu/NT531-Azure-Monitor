@@ -1,12 +1,22 @@
-FROM python:3.11-slim
+# Sử dụng base image Python 3.10 loại slim 
+FROM python:3.10-slim
 
+# Đặt thư mục làm việc bên trong container là /app
 WORKDIR /app
-COPY . /app
 
-RUN pip install --no-cache-dir -r requirements.txt
+# 1. Sao chép file requirements
 
-# Cho phép chạy file bash
-RUN chmod +x run_all.sh
+COPY requirements.txt .
 
-# Khi container chạy → tự động thực thi script
-CMD ["bash", "run_all.sh"]
+# 2. Cài đặt các thư viện Từ file requirements
+RUN pip install -r requirements.txt
+
+# 3. Sao chép file kịch bản của bạn vào
+COPY locust_file.py .
+
+# Cổng mặc định của giao diện web Locust
+EXPOSE 8089
+
+# Lệnh mặc định để chạy khi container khởi động
+ENTRYPOINT ["locust"]
+CMD ["-f", "locust_file.py"]
