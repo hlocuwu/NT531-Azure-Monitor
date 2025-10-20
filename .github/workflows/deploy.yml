@@ -1,0 +1,113 @@
+name: AKS Deployment
+
+on:
+  push:
+    branches:
+      - 'main'
+  workflow_dispatch:
+
+env:
+  AZ_RG: res_group
+  AKS_NAME: AKSCluster
+
+jobs:
+  filter:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      migrations: ${{ steps.filter.outputs.migrations }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Filter changes paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'infra/helm/backend/**'
+            frontend:
+              - 'frontend/**'
+              - 'infra/helm/frontend/**'
+            migrations:
+              - 'backend/prisma/migrations/**'
+
+  migrate-db:
+    needs: filter
+    if: needs.filter.outputs.migrations == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Azure CLI
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Run migrate
+        run: |
+          az aks get-credentials --resource-group $AZ_RG --name $AKS_NAME --overwrite-existing
+          POD=$(kubectl get pod -n roadmap-maker -l "app.kubernetes.io/name=backend" -o jsonpath="{.items[0].metadata.name}")
+          echo "Using pod: $POD"
+          kubectl exec -n roadmap-maker $POD -- npx prisma migrate deploy
+        
+  deploy-frontend:
+    needs: filter
+    if: needs.filter.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Azure CLI
+        uses: azure/login@v1
+        with: 
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Install helm
+        uses: azure/setup-helm@v3
+      
+      - name: Deploy frontend
+        run: |
+          az aks get-credentials --resource-group $AZ_RG --name $AKS_NAME --overwrite-existing
+          helm upgrade --install roadmap-maker-frontend ./infra/helm/frontend --namespace roadmap-maker -f infra/helm/frontend/values.yaml
+          echo "===== POD STATUS (frontend - primary) ====="
+          kubectl get pods -n roadmap-maker -o wide
+
+  deploy-backend:
+    needs: [filter, migrate-db]
+    if: needs.filter.outputs.backend == 'true' && always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Azure CLI
+        uses: azure/login@v1
+        with: 
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Install helm
+        uses: azure/setup-helm@v3
+
+      - name: Deploy backend
+        run: |
+          az aks get-credentials --resource-group $AZ_RG --name $AKS_NAME --overwrite-existing
+          helm upgrade --install roadmap-maker-backend ./infra/helm/backend --namespace roadmap-maker -f infra/helm/backend/values.yaml
+          echo "===== POD STATUS (backend - primary) ====="
+          kubectl get pods -n roadmap-maker -o wide
+
+      
