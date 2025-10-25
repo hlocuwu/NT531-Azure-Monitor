@@ -1,16 +1,13 @@
 import random
 from locust import HttpUser, TaskSet, task, between
 
-# NGƯỜI DÙNG CHỈ XEM
+#  "CHỈ XEM" 
 class ReadOnlyTasks(TaskSet):
     """
-    Mô phỏng user chỉ lướt xem, chiếm phần lớn traffic.
-    Luồng: Xem tất cả boards -> Chọn 1 board -> Xem chi tiết 1 card.
+    Kịch bản API Backend: Mô phỏng user chỉ lướt xem.
     """
-
     @task
     def view_boards_and_cards_flow(self):
-        
         # Lấy tất cả các boards
         board_id_list = []
         with self.client.get(
@@ -21,15 +18,12 @@ class ReadOnlyTasks(TaskSet):
             if not response.ok:
                 response.failure("Failed to get all boards")
                 return 
-            
             try:
                 boards = response.json().get("data", [])
                 if not boards:
                     response.failure("No boards found")
                     return 
-                
                 board_id_list = [b.get("id") for b in boards if b.get("id")]
-            
             except Exception as e:
                 response.failure(f"Bad JSON response from /boards: {e}")
                 return
@@ -50,14 +44,11 @@ class ReadOnlyTasks(TaskSet):
             if not response.ok:
                 response.failure(f"Failed to get cards for board {random_board_id}")
                 return
-
             try:
                 cards = response.json().get("data", [])
                 if not cards:
                     return 
-                
                 card_id_list = [c.get("id") for c in cards if c.get("id")]
-            
             except Exception as e:
                 response.failure(f"Bad JSON from /cards/board: {e}")
                 return
@@ -75,27 +66,23 @@ class ReadOnlyTasks(TaskSet):
         )
 
 
-# NGƯỜI DÙNG CHỈNH SỬA
+#  "CHỈNH SỬA" 
 class ReadWriteTasks(TaskSet):
     """
-    Mô phỏng user "nặng" - tạo, sửa, xóa dữ liệu.
-    Luồng: Tự lấy Board ID -> Tạo 1 card -> Cập nhật card đó -> Xóa card đó.
+    Kịch bản API Backend: Mô phỏng user "nặng" - tạo, sửa, xóa dữ liệu.
     """
-    
     @task
     def create_update_delete_card_flow(self):
-        
         # TỰ ĐỘNG LẤY BOARD ID
         board_id_list = []
         with self.client.get(
             "/boards", 
-            name="/boards (GET for WriteTask)", # Đặt tên khác để phân biệt
+            name="/boards (GET for WriteTask)",
             catch_response=True
         ) as response:
             if not response.ok:
                 response.failure("Failed to get boards (for WriteTask)")
                 return 
-            
             try:
                 boards = response.json().get("data", [])
                 if not boards:
@@ -107,7 +94,7 @@ class ReadWriteTasks(TaskSet):
                 return
 
         if not board_id_list:
-            return # Không có board ID để tiếp tục
+            return
 
         selected_board_id = random.choice(board_id_list)
         
@@ -123,7 +110,6 @@ class ReadWriteTasks(TaskSet):
         
         created_card_id = None
         
-        # Gửi request tạo card 
         with self.client.post(
             "/cards",
             json=new_card_data,
@@ -164,12 +150,47 @@ class ReadWriteTasks(TaskSet):
         )
 
 
-# USER CHÍNH (ĐIỀU PHỐI)
-class ApiUser(HttpUser):
+
+# USER 1: NGƯỜI DÙNG FRONTEND 
+class FrontendUser(HttpUser):
+    """
+    Loại user này chỉ đánh vào FRONTEND.
+    Sẽ chiếm 1/4 (25%) tổng số user.
+    """
+    
+    host = "http://172.188.200.212"
+    
+    # Tỷ lệ: 1 (so với 3 của BackendUser)
+    weight = 1 
+    
+    wait_time = between(1, 5) # Chờ 1-5 giây
+
+    @task
+    def load_homepage(self):
+        """Tác vụ 1: Truy cập trang chủ"""
+        self.client.get(
+            "/",
+            name="/ (Frontend Homepage)"
+        )
+
+
+
+# USER 2: NGƯỜI DÙNG BACKEND
+class BackendUser(HttpUser):
+    """
+    Loại user này chỉ đánh vào BACKEND (API).
+    Sẽ chiếm 3/4 (75%) tổng số user.
+    """
+    
+    host = "http://135.171.146.68"
+    
+    # Tỷ lệ: 3 (so với 1 của FrontendUser)
+    weight = 3 
+    
     wait_time = between(1, 3) 
 
-    # Phân bổ tỷ lệ hành vi:
+    # Phân bổ tỷ lệ hành vi (cho riêng user backend):
     tasks = {
-        ReadOnlyTasks: 4,  # 4/5 = 80%
-        ReadWriteTasks: 1  # 1/5 = 20%
+        ReadOnlyTasks: 4,  # 80% user backend sẽ chỉ xem
+        ReadWriteTasks: 1  # 20% user backend sẽ chỉnh sửa
     }
