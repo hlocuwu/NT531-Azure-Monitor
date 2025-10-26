@@ -164,4 +164,4 @@ tolerations: []
 affinity: {}
 
 config:
-  apiUrl: "http://135.171.146.68/"
+  apiUrl: "http://135.171.146.68"
